@@ -36,7 +36,7 @@ class QuicClient(
 
     companion object {
         private const val TAG = "QuicClient"
-        const val SERVER_BASE = "https://gophertester.farhadsoleimani.com"
+        const val SERVER_BASE = "https://app.cv2x.org"
         private const val PATH_DOWN = "/h3/down"
         private const val PATH_UP = "/h3/up"
 
