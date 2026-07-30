@@ -20,7 +20,7 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          source: "server/main.py,server/run.sh,server/requirements.txt"
+          source: "server/main.py,server/run.sh,server/serve.py,server/requirements.txt"
           target: "~/GopherTester"
           strip_components: 0   # preserves "server/" so files land in ~/GopherTester/server/
 
