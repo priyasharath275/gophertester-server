@@ -1,0 +1,42 @@
+name: Deploy GopherTester server
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "server/**"          # only deploy when server code actually changes
+  workflow_dispatch: {}      # lets you click "Run workflow" manually too
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Copy server files to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "server/main.py,server/run.sh,server/requirements.txt"
+          target: "~/GopherTester"
+          strip_components: 0   # preserves "server/" so files land in ~/GopherTester/server/
+
+      - name: Install deps and restart server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+            cd ~/GopherTester/server
+            chmod +x run.sh
+            source venv/bin/activate
+            pip install -r requirements.txt
+            bash run.sh
+            sleep 2
+            tail -20 server.log
+            curl -sf https://app.cv2x.org/health
