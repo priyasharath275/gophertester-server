@@ -12,7 +12,7 @@ LOG_FILE="server.log"
 
 # Adjust these to match YOUR certificate (subdomain!)
 CERT_PATH="/etc/letsencrypt/live/app.cv2x.org/fullchain.pem"
-  KEY_PATH="/etc/letsencrypt/live/app.cv2x.org/privkey.pem"
+KEY_PATH="/etc/letsencrypt/live/app.cv2x.org/privkey.pem"
 
 # Our app lives in main.py
 APP_MODULE="${APP_MODULE:-main:app}"
@@ -22,11 +22,12 @@ REDIS_URL="redis://127.0.0.1:${REDIS_PORT}/0"
 export REDIS_URL
 export LOG_LEVEL="${LOG_LEVEL:-INFO}"
 
-# ───────────────────────── 0) sudo escalation ───────────────────────────
-if [[ $EUID -ne 0 ]]; then
-  echo ">> Not root - re-executing with sudo …"
-  exec sudo --preserve-env=REDIS_URL,LOG_LEVEL,APP_MODULE "$0" "$@"
-fi
+# ───────────────────────── 0) root no longer required ───────────────────────
+# NOTE: this used to force-reexec itself with `sudo` to bind port 443.
+# Instead, grant the venv's python/hypercorn the net_bind_service capability
+# ONCE (so this script can run non-interactively from a git deploy hook):
+#   sudo setcap 'cap_net_bind_service=+ep' $(readlink -f venv/bin/python3)
+#   sudo setcap 'cap_net_bind_service=+ep' $(readlink -f venv/bin/hypercorn)
 
 # ───────────────────────── 1) stop old server ───────────────────────────
 if [[ -f "$PID_FILE" ]]; then
