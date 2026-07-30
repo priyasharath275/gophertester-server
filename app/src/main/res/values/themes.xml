@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App theme with no action bar -->
+    <style name="Theme.GopherTester" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- Optional: nice edge-to-edge system bars -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+    </style>
+</resources>
