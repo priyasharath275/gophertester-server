@@ -50,8 +50,7 @@ _fmt = logging.Formatter(
     datefmt="%Y-%m-%dT%H:%M:%S",
 )
 
-_file = RotatingFileHandler(
-    LOG_FILE, maxBytes=5_000_000, backupCount=3, encoding="utf-8")
+_file = RotatingFileHandler(LOG_FILE, maxBytes=5_000_000, backupCount=3, encoding="utf-8")
 _file.setFormatter(_fmt)
 logger.addHandler(_file)
 
@@ -82,8 +81,6 @@ except Exception as e:
     redis = None
 
 # ───────────────────────── Envelope helpers ─────────────────────────
-
-
 def get_env(obj: dict) -> dict:
     """Extract/normalize an envelope object from a message dict."""
     env = obj.get("envelope")
@@ -127,23 +124,21 @@ def compute_delays_from_env(env: dict) -> dict:
     delay_B_to_server_ms, server_rtt_B_ms (subset if some stamps missing).
     """
     a_send = stamp_ms(env, "A.send")
-    c_rx = stamp_ms(env, "srv.C.rx")
-    c_tx = stamp_ms(env, "srv.C.tx")
-    b_rx = stamp_ms(env, "B.rx")
-    b_tx = stamp_ms(env, "B.tx")
-    d_rx = stamp_ms(env, "srv.D.rx")
+    c_rx   = stamp_ms(env, "srv.C.rx")
+    c_tx   = stamp_ms(env, "srv.C.tx")
+    b_rx   = stamp_ms(env, "B.rx")
+    b_tx   = stamp_ms(env, "B.tx")
+    d_rx   = stamp_ms(env, "srv.D.rx")
 
     out: Dict[str, Optional[float]] = {
         "delay_A_to_server_ms": (c_rx - a_send) if (a_send is not None and c_rx is not None) else None,
-        "delay_server_to_B_ms": (b_rx - c_tx) if (c_tx is not None and b_rx is not None) else None,
-        "delay_B_to_server_ms": (d_rx - b_tx) if (b_tx is not None and d_rx is not None) else None,
-        "server_rtt_B_ms":      (d_rx - c_tx) if (c_tx is not None and d_rx is not None) else None,
+        "delay_server_to_B_ms": (b_rx - c_tx)   if (c_tx   is not None and b_rx is not None) else None,
+        "delay_B_to_server_ms": (d_rx - b_tx)   if (b_tx   is not None and d_rx is not None) else None,
+        "server_rtt_B_ms":      (d_rx - c_tx)   if (c_tx   is not None and d_rx is not None) else None,
     }
     return {k: float(v) for k, v in out.items() if v is not None}
 
 # ───────────────────────── Time helpers ─────────────────────────
-
-
 def iso_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
@@ -193,7 +188,6 @@ class WSChannel(Channel):
 
 class H3Channel(Channel):
     """JSONL over HTTP stream: outbound lines are queued to the writer."""
-
     def __init__(self):
         # Unbounded: we apply backpressure on producers via await, no silent drops.
         self.q: asyncio.Queue[Optional[str]] = asyncio.Queue()
@@ -209,7 +203,6 @@ class H3Channel(Channel):
 # ───────────────────────── Peer (per-user writer) ─────────────────────────
 class Peer:
     """Per-connection serializer + backpressure via a dedicated writer task."""
-
     def __init__(self, phone: str, ch: Channel):
         self.phone = phone
         self.ch = ch
@@ -254,8 +247,7 @@ pending: Dict[str, Dict[str, Any]] = {}   # by request_id
 clock_offset_ms: Dict[str, int] = {}
 clock_rtt_ms: Dict[str, int] = {}
 
-# key=frozenset({a,b}) -> last_seen_epoch_secs
-active_sessions: Dict[frozenset[str], float] = {}
+active_sessions: Dict[frozenset[str], float] = {}  # key=frozenset({a,b}) -> last_seen_epoch_secs
 SESSION_TTL = 15      # seconds without traffic means drop
 
 SWEEP_INTERVAL = 10
@@ -305,8 +297,7 @@ async def sweeper():
         now = time.time()
 
         # offline
-        to_drop = [u for u, ts in list(
-            last_seen.items()) if now - ts > OFFLINE_AFTER]
+        to_drop = [u for u, ts in list(last_seen.items()) if now - ts > OFFLINE_AFTER]
         if to_drop:
             log_msg("sweep_offline", users=to_drop)
         for u in to_drop:
@@ -329,16 +320,14 @@ async def sweeper():
                 log_msg("redis_sweep_error", error=str(e))
 
         # stale pending
-        stale = [rid for rid, info in list(
-            pending.items()) if now - info.get("t_created", now) > PENDING_TTL]
+        stale = [rid for rid, info in list(pending.items()) if now - info.get("t_created", now) > PENDING_TTL]
         for rid in stale:
             pending.pop(rid, None)
         if stale:
             log_msg("sweep_pending", removed=stale)
 
         # stale sessions
-        stale_keys = [k for k, ts in list(
-            active_sessions.items()) if now - ts > SESSION_TTL]
+        stale_keys = [k for k, ts in list(active_sessions.items()) if now - ts > SESSION_TTL]
         for k in stale_keys:
             active_sessions.pop(k, None)
         if stale_keys:
@@ -392,20 +381,17 @@ async def handle_message(
         obj["request_id"] = req_id
 
     if logger.isEnabledFor(logging.DEBUG):
-        logger.debug("MSG %s %s", action or msg_type,
-                     json.dumps(obj, ensure_ascii=False))
+        logger.debug("MSG %s %s", action or msg_type, json.dumps(obj, ensure_ascii=False))
 
     # ───── strict self-route guard for routed actions
     if action in ("send_location_data", "reply_location_data", "get_location_data", "session_control"):
         src = target.get("sourceId") or phone
         dst = target.get("destinationId")
         if not dst:
-            log_msg("drop_no_destination", action=action,
-                    request_id=req_id, src=src)
+            log_msg("drop_no_destination", action=action, request_id=req_id, src=src)
             return
         if dst == src:
-            log_msg("drop_self_route", action=action,
-                    request_id=req_id, phone=phone)
+            log_msg("drop_self_route", action=action, request_id=req_id, phone=phone)
             return
 
     # ───── timesync ping-pong
@@ -413,8 +399,7 @@ async def handle_message(
         seq = obj.get("seq")
         t1 = obj.get("t1")
         t2 = iso_now()
-        reply = {"type": "timesync", "seq": seq,
-                 "t1": t1, "t2": t2, "t3": iso_now()}
+        reply = {"type": "timesync", "seq": seq, "t1": t1, "t2": t2, "t3": iso_now()}
         await send_self(reply)
         log_msg("timesync", phone=phone, seq=seq)
         return
@@ -437,8 +422,7 @@ async def handle_message(
     if action == "user_existence_inquiry":
         user_b = target.get("destinationId")
         status = "online" if (user_b and user_b in connections) else "offline"
-        log_msg("existence_inquiry", from_=phone,
-                to=user_b, status=status, request_id=req_id)
+        log_msg("existence_inquiry", from_=phone, to=user_b, status=status, request_id=req_id)
         reply = {
             "request_id": req_id,
             "timestamp": iso_now(),
@@ -458,7 +442,7 @@ async def handle_message(
         ts_a_iso = obj.get("timestamp") or ""
 
         # Stamp envelope at server receive & send
-        env_in = get_env(obj)
+        env_in   = get_env(obj)
         env_c_rx = add_stamp(env_in, "srv.C.rx", now_ms())
 
         # Prefer A’s offset if known; else simple difference
@@ -521,8 +505,7 @@ async def handle_message(
     if action == "reply_location_data":
         info = pending.get(req_id) or {}
         user_b = target.get("sourceId") or phone
-        # strict route by destinationId; fallback to pending
-        dst_user = target.get("destinationId") or info.get("a")
+        dst_user = target.get("destinationId") or info.get("a")  # strict route by destinationId; fallback to pending
         t_now = now_ms()
 
         # Envelope: add srv.D.rx on arrival
@@ -531,8 +514,7 @@ async def handle_message(
 
         # Existing clientTimes (still used as fallback)
         payload = obj.get("payload") or {}
-        client_times = (payload.get("clientTimes") or {}
-                        ) if isinstance(payload, dict) else {}
+        client_times = (payload.get("clientTimes") or {}) if isinstance(payload, dict) else {}
 
         # Derive delays from envelope (preferred)
         env_delays = compute_delays_from_env(env_d_rx)
@@ -547,11 +529,9 @@ async def handle_message(
             recv_c_iso = client_times.get("recv_c_ts") or ""
             if recv_c_iso:
                 t_b_recv_c_srv = iso_to_ms(recv_c_iso) + offset_b
-                delay_server_to_b = max(
-                    0.0, float(t_b_recv_c_srv - t_c_sent_ms))
+                delay_server_to_b = max(0.0, float(t_b_recv_c_srv - t_c_sent_ms))
             else:
-                delay_server_to_b = max(
-                    0.0, float((t_now - t_c_sent_ms) / 2.0))
+                delay_server_to_b = max(0.0, float((t_now - t_c_sent_ms) / 2.0))
 
         delay_b_to_server = env_delays.get("delay_B_to_server_ms")
         if delay_b_to_server is None and t_c_sent_ms is not None:
@@ -563,12 +543,10 @@ async def handle_message(
                 send_d_iso = client_times.get("send_d_ts") or ""
                 recv_c_iso = client_times.get("recv_c_ts") or ""
                 if send_d_iso and recv_c_iso:
-                    proc_ms = float(
-                        (iso_to_ms(send_d_iso) - iso_to_ms(recv_c_iso)))
+                    proc_ms = float((iso_to_ms(send_d_iso) - iso_to_ms(recv_c_iso)))
             if proc_ms is not None and delay_server_to_b is not None:
                 rtt_total = float(t_now - t_c_sent_ms)
-                delay_b_to_server = max(
-                    0.0, rtt_total - delay_server_to_b - max(0.0, proc_ms))
+                delay_b_to_server = max(0.0, rtt_total - delay_server_to_b - max(0.0, proc_ms))
 
         delay_a_to_server = env_delays.get("delay_A_to_server_ms")
         if delay_a_to_server is None:
@@ -580,8 +558,7 @@ async def handle_message(
 
         # NEW: B's own time-sync metrics (strings), with server-side fallback if missing
         b_off = (payload.get("b_offset_ms") if isinstance(payload, dict) else None) or (
-            str(int(clock_offset_ms[user_b])
-                ) if user_b in clock_offset_ms else None
+            str(int(clock_offset_ms[user_b])) if user_b in clock_offset_ms else None
         )
         b_rtt = (payload.get("b_ping_rtt_ms") if isinstance(payload, dict) else None) or (
             str(int(clock_rtt_ms[user_b])) if user_b in clock_rtt_ms else None
@@ -630,6 +607,7 @@ async def handle_message(
             log_msg("deliver_to_A_failed", request_id=req_id, to=dst_user)
         return
 
+
     # ───── BSM (Basic Safety Message) reports, e.g. from WezzOn at 10Hz.
     # Always persisted server-side (durable), and forwarded live to the
     # destination if it happens to be connected right now.
@@ -663,8 +641,7 @@ async def handle_message(
         except Exception as e:
             log_msg("bsm_echo_error", src=src, error=str(e))
 
-        log_msg("bsm_data", request_id=req_id, from_=src,
-                to=dst, delivered=delivered, echoed=echoed)
+        log_msg("bsm_data", request_id=req_id, from_=src, to=dst, delivered=delivered, echoed=echoed)
         return
 
     # ───── (Safety) If a client ever sends get_location_data, route strictly by destinationId (no echo).
@@ -672,18 +649,15 @@ async def handle_message(
         src = target.get("sourceId") or phone
         dst = target.get("destinationId")
         if not dst or dst == src:
-            log_msg("drop_get_location_bad", src=src,
-                    dst=dst, request_id=req_id)
+            log_msg("drop_get_location_bad", src=src, dst=dst, request_id=req_id)
             return
         ok = await send_to(dst, obj)
-        log_msg("forward_get_location", src=src,
-                dst=dst, ok=ok, request_id=req_id)
+        log_msg("forward_get_location", src=src, dst=dst, ok=ok, request_id=req_id)
         return
 
     # ───── Admin: pair users A->B (push down to clients)
     if action == "admin_pair":
-        pairs = ((obj.get("payload") or {}).get("pairs") or []
-                 ) if isinstance(obj.get("payload"), dict) else []
+        pairs = ((obj.get("payload") or {}).get("pairs") or []) if isinstance(obj.get("payload"), dict) else []
         for p in pairs:
             try:
                 a, b = p[0], p[1]
@@ -722,8 +696,7 @@ async def handle_message(
 
     # ───── Admin: stop paired users (tell both sides to stop)
     if action == "admin_stop":
-        pairs = ((obj.get("payload") or {}).get("pairs") or []
-                 ) if isinstance(obj.get("payload"), dict) else []
+        pairs = ((obj.get("payload") or {}).get("pairs") or []) if isinstance(obj.get("payload"), dict) else []
         for p in pairs:
             try:
                 a, b = p[0], p[1]
@@ -750,8 +723,7 @@ async def handle_message(
         user_src = target.get("sourceId") or phone
         user_dst = target.get("destinationId")
         payload = obj.get("payload") or {}
-        log_msg("session_control_in", from_=user_src,
-                to=user_dst, payload=payload, request_id=req_id)
+        log_msg("session_control_in", from_=user_src, to=user_dst, payload=payload, request_id=req_id)
 
         # Drop the session immediately if someone sends stop
         if isinstance(payload, dict) and (payload.get("cmd") or "").lower() == "stop" and user_dst:
@@ -798,8 +770,7 @@ async def handle_message(
 async def ws_endpoint(websocket: WebSocket):
     await websocket.accept()
 
-    phone = websocket.query_params.get(
-        "phone") or websocket.headers.get("x-user-phone")
+    phone = websocket.query_params.get("phone") or websocket.headers.get("x-user-phone")
     if not phone:
         phone = f"anon-{str(id(websocket))[-6:]}"
     ch = WSChannel(websocket)
@@ -877,8 +848,7 @@ async def h3_stream(request: Request):
     call request.is_disconnected(); StreamingResponse cancels the generator when
     the client disconnects. This avoids competing for ASGI receive events.
     """
-    phone = request.query_params.get("phone") or request.headers.get(
-        "x-user-phone") or f"anon-{id(request) % 10_000:04d}"
+    phone = request.query_params.get("phone") or request.headers.get("x-user-phone") or f"anon-{id(request)%10_000:04d}"
     ch = H3Channel()
     peer = Peer(phone, ch)
     connections[phone] = peer
@@ -891,8 +861,7 @@ async def h3_stream(request: Request):
 
     # Send identity immediately (will flush once writer starts)
     await peer.enqueue({"type": "identity", "phone": phone})
-    log_msg("h3_connect", phone=phone, ip=getattr(
-        request.client, "host", None))
+    log_msg("h3_connect", phone=phone, ip=getattr(request.client, "host", None))
 
     async def reader():
         """Consume JSON texts from the request body. Robust to missing newlines."""
@@ -916,14 +885,12 @@ async def h3_stream(request: Request):
                     if i >= n:
                         break
                     try:
-                        # parses one complete JSON value
-                        obj, j = decoder.raw_decode(buf, i)
+                        obj, j = decoder.raw_decode(buf, i)  # parses one complete JSON value
                     except ValueError:
                         # Incomplete JSON at the end; keep it for the next chunk.
                         break
                     # Successfully decoded [i:j)
                     i = j
-
                     async def _send_self(payload: dict) -> None:
                         await peer.enqueue(payload)
                     await handle_message(obj, phone, _send_self)
@@ -985,8 +952,7 @@ async def h3_stream(request: Request):
 # ───────────────────────── Split HTTP/2/3 endpoints (proxy-safe) ─────────────────────────
 @app.get("/h3/down")
 async def h3_down(request: Request):
-    phone = request.query_params.get("phone") or request.headers.get(
-        "x-user-phone") or f"anon-{id(request) % 10_000:04d}"
+    phone = request.query_params.get("phone") or request.headers.get("x-user-phone") or f"anon-{id(request)%10_000:04d}"
     ch = H3Channel()
     peer = Peer(phone, ch)
     connections[phone] = peer
@@ -998,8 +964,7 @@ async def h3_down(request: Request):
             log_msg("redis_set_error", phone=phone, error=str(e))
 
     await peer.enqueue({"type": "identity", "phone": phone})
-    log_msg("h3_down_connect", phone=phone,
-            ip=getattr(request.client, "host", None))
+    log_msg("h3_down_connect", phone=phone, ip=getattr(request.client, "host", None))
 
     async def writer():
         yield ""  # flush headers
@@ -1037,10 +1002,8 @@ async def h3_down(request: Request):
 
 @app.post("/h3/up")
 async def h3_up(request: Request):
-    phone = request.query_params.get("phone") or request.headers.get(
-        "x-user-phone") or f"anon-{id(request) % 10_000:04d}"
-    log_msg("h3_up_connect", phone=phone,
-            ip=getattr(request.client, "host", None))
+    phone = request.query_params.get("phone") or request.headers.get("x-user-phone") or f"anon-{id(request)%10_000:04d}"
+    log_msg("h3_up_connect", phone=phone, ip=getattr(request.client, "host", None))
 
     buf = ""
     try:
@@ -1088,5 +1051,4 @@ if __name__ == "__main__":
     #   hypercorn main:app --bind 0.0.0.0:8080 --h2
     # For HTTP/3:
     #   hypercorn main:app --quic-bind 0.0.0.0:8443 --certfile cert.pem --keyfile key.pem
-    uvicorn.run("main:app", host=host, port=port,
-                reload=reload, log_level=LOG_LEVEL.lower())
+    uvicorn.run("main:app", host=host, port=port, reload=reload, log_level=LOG_LEVEL.lower())
