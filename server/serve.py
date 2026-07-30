@@ -19,7 +19,7 @@ import os
 from hypercorn.asyncio import serve
 from hypercorn.config import Config
 
-from main import app
+from GopherTester.server.serve import app
 
 config = Config()
 config.bind = ["0.0.0.0:443"]
