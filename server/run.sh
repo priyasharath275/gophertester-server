@@ -82,17 +82,10 @@ if [[ -n "${OLD_TCP_PID:-}" ]]; then
 fi
 
 # ───────────────────────── 6) launch server ─────────────────────────────
-if command -v hypercorn >/dev/null 2>&1; then
-  echo ">> Starting Hypercorn (${APP_MODULE}) on TLS :443 (h1/h2) and QUIC :443 …"
-  # HTTP/1.1 + HTTP/2 are negotiated over TLS on TCP:443 (requires 'h2' package).
-  # HTTP/3 (QUIC) served on UDP:443 (requires aioquic; installed via 'hypercorn[h3]').
-  nohup hypercorn "${APP_MODULE}" \
-        --bind 0.0.0.0:443 \
-        --certfile "$CERT_PATH" \
-        --keyfile  "$KEY_PATH" \
-        --quic-bind 0.0.0.0:443 \
-        --log-level "${LOG_LEVEL,,}" \
-        >> "$LOG_FILE" 2>&1 &
+if python3 -c "import hypercorn" >/dev/null 2>&1; then
+  echo ">> Starting Hypercorn (${APP_MODULE}) via serve.py on TLS :443 (HTTP/1.1 only, WebSocket-compatible) and QUIC :443 (h3) …"
+  export CERT_PATH KEY_PATH LOG_FILE
+  nohup python3 serve.py >> "$LOG_FILE" 2>&1 &
   NEW_PID=$!
 else
   echo ">> Hypercorn not found; falling back to Uvicorn (TLS on TCP :443, no HTTP/2/3)…"
