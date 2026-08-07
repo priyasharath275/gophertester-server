@@ -641,7 +641,30 @@ async def handle_message(
         except Exception as e:
             log_msg("bsm_echo_error", src=src, error=str(e))
 
-        log_msg("bsm_data", request_id=req_id, from_=src, to=dst, delivered=delivered, echoed=echoed)
+        # Broadcast to every OTHER currently connected client too, so any
+        # number of WezzOn devices can render every vehicle's live
+        # position on the map (not just their own). Best-effort: one
+        # slow/broken peer doesn't block delivery to the rest.
+        broadcast_count = 0
+        for peer_id in list(connections.keys()):
+            if peer_id == src or peer_id == dst:
+                continue  # already handled above
+            try:
+                ok = await send_to(peer_id, obj)
+                if ok:
+                    broadcast_count += 1
+            except Exception as e:
+                log_msg("bsm_broadcast_error", to=peer_id, error=str(e))
+
+        log_msg(
+            "bsm_data",
+            request_id=req_id,
+            from_=src,
+            to=dst,
+            delivered=delivered,
+            echoed=echoed,
+            broadcast_count=broadcast_count,
+        )
         return
 
     # ───── (Safety) If a client ever sends get_location_data, route strictly by destinationId (no echo).
